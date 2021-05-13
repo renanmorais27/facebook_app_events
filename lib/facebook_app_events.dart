@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -16,6 +17,10 @@ class FacebookAppEvents {
   static const eventNameViewedContent = 'fb_mobile_content_view';
   static const eventNameRated = 'fb_mobile_rate';
   static const eventNameInitiatedCheckout = 'fb_mobile_initiated_checkout';
+  static const eventNameAddedToCart = 'fb_mobile_add_to_cart';
+  static const eventNameAddedToWishlist = 'fb_mobile_add_to_wishlist';
+  static const eventNameAddedPaymentInfo = 'fb_mobile_add_payment_info';
+  static const eventNameSubscribe = 'Subscribe';
 
   static const _paramNameValueToSum = "_valueToSum";
   static const paramNameCurrency = "fb_currency";
@@ -24,6 +29,7 @@ class FacebookAppEvents {
   static const paramNameNumItems = "fb_num_items";
   static const paramValueYes = "1";
   static const paramValueNo = "0";
+  static const paramSuccess = "fb_success";
 
   /// Parameter key used to specify a generic content type/family for the logged event, e.g.
   /// "music", "photo", "video".  Options to use will vary depending on the nature of the app.
@@ -38,6 +44,10 @@ class FacebookAppEvents {
   /// Parameter key used to specify an ID for the specific piece of content being logged about.
   /// This could be an EAN, article identifier, etc., depending on the nature of the app.
   static const paramNameContentId = "fb_content_id";
+
+  /// Parameter key used to specify the unique ID for all events within a subscription in an
+  /// EVENT_NAME_SUBSCRIBE or EVENT_NAME_START_TRIAL event.
+  static const paramOrderId = "fb_order_id";
 
   /// Clears the current user data
   Future<void> clearUserData() {
@@ -190,14 +200,101 @@ class FacebookAppEvents {
     Map<String, dynamic> content,
     String id,
     String type,
+    String currency,
+    double price,
   }) {
     return logEvent(
       name: eventNameViewedContent,
       parameters: {
-        paramNameContent: content,
+        paramNameContent: content != null ? json.encode(content) : null,
         paramNameContentId: id,
         paramNameContentType: type,
+        paramNameCurrency: currency,
       },
+      valueToSum: price,
+    );
+  }
+
+  /// Log this event when the user has added item to cart
+  ///
+  /// See: https://developers.facebook.com/docs/reference/androidsdk/current/facebook/com/facebook/appevents/appeventsconstants.html/#eventnameaddedtocart
+  Future<void> logAddToCart({
+    Map<String, dynamic> content,
+    @required String id,
+    @required String type,
+    @required String currency,
+    @required double price,
+  }) {
+    return logEvent(
+      name: eventNameAddedToCart,
+      parameters: {
+        paramNameContent: content != null ? json.encode(content) : null,
+        paramNameContentId: id,
+        paramNameContentType: type,
+        paramNameCurrency: currency,
+      },
+      valueToSum: price,
+    );
+  }
+
+  /// Log this event when the user has added item to cart
+  ///
+  /// See: https://developers.facebook.com/docs/reference/androidsdk/current/facebook/com/facebook/appevents/appeventsconstants.html/#eventnameaddedtowishlist
+  Future<void> logAddToWishlist({
+    Map<String, dynamic> content,
+    @required String id,
+    @required String type,
+    @required String currency,
+    @required double price,
+  }) {
+    if (content == null || id == null || type == null || currency == null) {
+      return logEvent(
+        name: eventNameAddedToWishlist,
+        valueToSum: price,
+      );
+    }
+    return logEvent(
+      name: eventNameAddedToWishlist,
+      parameters: {
+        paramNameContent: content != null ? json.encode(content) : null,
+        paramNameContentId: id,
+        paramNameContentType: type,
+        paramNameCurrency: currency,
+      },
+      valueToSum: price,
+    );
+  }
+
+  /// Log this event when the user has entered their payment info.
+  ///
+  /// See: https://developers.facebook.com/docs/reference/androidsdk/current/facebook/com/facebook/appevents/appeventsconstants.html/#eventnameaddedpaymentinfo
+  Future<void> logAddPaymentInfo({
+    @required bool success,
+  }) {
+    return logEvent(
+      name: eventNameAddedPaymentInfo,
+      parameters: {
+        paramSuccess: success ? paramValueYes : paramValueNo,
+      },
+    );
+  }
+
+  /// The start of a paid subscription for a product or service you offer.
+  ///
+  /// See: https://developers.facebook.com/docs/reference/androidsdk/current/facebook/com/facebook/appevents/appeventsconstants.html/#eventnamesubscribe
+
+  Future<void> logSubscribeEvent({
+    @required String orderId,
+    @required String currency,
+    @required double price,
+  }) {
+    return logEvent(
+      name: eventNameSubscribe,
+      parameters: {
+        paramOrderId: orderId,
+        paramNameCurrency: currency,
+      },
+      valueToSum: price,
     );
   }
 
@@ -248,6 +345,16 @@ class FacebookAppEvents {
     @required int numItems,
     bool paymentInfoAvailable = false,
   }) {
+    if (contentType == null ||
+        contentId == null ||
+        numItems == null ||
+        currency == null ||
+        paymentInfoAvailable == null) {
+      return logEvent(
+        name: eventNameInitiatedCheckout,
+        valueToSum: totalPrice,
+      );
+    }
     return logEvent(
       name: eventNameInitiatedCheckout,
       valueToSum: totalPrice,
@@ -262,18 +369,15 @@ class FacebookAppEvents {
     );
   }
 
-   /// Sets the Advert Tracking propeety for iOS advert tracking 
-   /// an iOS 14+ feature, android should just return a success. 
+  /// Sets the Advert Tracking propeety for iOS advert tracking
+  /// an iOS 14+ feature, android should just return a success.
   Future<void> setAdvertiserTracking({
     @required bool enabled,
   }) {
-    final args = <String, dynamic>{
-      'enabled': enabled
-    };
+    final args = <String, dynamic>{'enabled': enabled};
 
     return _channel.invokeMethod<void>('setAdvertiserTracking', args);
   }
-
 
   // ---------------------------------------------------------------------------
   // ---------------------------------------------------------------------------
